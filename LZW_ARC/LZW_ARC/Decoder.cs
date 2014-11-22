@@ -3,33 +3,91 @@ using System.Collections.Generic;
 using System.IO;
 using System.Collections;
 using System.Text;
+using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace LZW_ARC
 {
     class Decoder
     {
-        static int curIndexLenght = 9;
-        static int readBytesBlockCount = 64;
+        int curIndexLenght = 9;
+        int readBytesBlockCount = 256;
 
-        static void Main1(string[] args)
+        Timer t;
+        long inFilePos = -1;
+        long inFileLength = -1;
+        long outFileLength = -1;
+
+        public event EventHandler<PersentEventArgs> PersentEvent;
+
+        public Decoder()
         {
-            string inFileName = Console.ReadLine();
-            FileStream inFile = new FileStream(inFileName, FileMode.Open);
+            t = new Timer();
+            t.Interval = 500;
+            t.Tick += t_Tick;
+
+            t.Start();
+        }
+
+        private void t_Tick(object sender, EventArgs e)
+        {
+            if (inFilePos >= 1)
+            {
+                int curPersent = (int)(((double)inFilePos / (double)inFileLength) * 100);
+                int compression = (int)(((double)inFilePos / (double)outFileLength) * 100);
+                PersentEventArgs e1 = new PersentEventArgs(curPersent, inFileLength, inFilePos, compression);
+                if (curPersent == 100) t.Stop();
+                PersentEvent(this, e1);
+            }
+        }
+
+        public async void DecodeAsync(string inFileName, string outFolder)
+        {
+            await Task.Run(() => { Decode(inFileName, outFolder); });
+        }
+
+        void Decode(string inFileName, string outFolder)
+        {
+            FileStream inFile;
+            FileStream outFile;
+            try
+            {
+                inFile = new FileStream(inFileName, FileMode.Open);
+            }
+            catch
+            {
+                MessageBox.Show("Отказано в доступе к файлу", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                inFilePos = 1;
+                inFileLength = 1;
+                outFileLength = 1;
+                return;
+            }
+            inFileLength = inFile.Length;
 
             //чтение имени файла из архива
             int outFileNameLenght = inFile.ReadByte();
             byte[] outFileNameBytes = new byte[outFileNameLenght];
             inFile.Read(outFileNameBytes, 0, outFileNameLenght);
             string outFileName = Encoding.ASCII.GetString(outFileNameBytes);
-            FileStream outFile = new FileStream(outFileName, FileMode.Create);
+
+            try
+            {
+                outFile = new FileStream(outFolder + "\\" + outFileName, FileMode.Create);
+            }
+            catch 
+            {
+
+                MessageBox.Show("Ошибочный формат файла", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                inFilePos = 1;
+                inFileLength = 1;
+                outFileLength = 1;
+                return;
+            }
 
             //очередь бит для чтения
             Queue<bool> inBitStream = new Queue<bool>();
             //макс. размер массива при текущей длине номера цепочки
             int curTableDimension = (int)Math.Pow(2, curIndexLenght);
-
-            int onePersent = (int)inFile.Length / 100;
-            int curPersents = 0;
 
             //чтение даты файла из архива
             byte[] outFileTimeTicksBytes = new byte[sizeof(long)];
@@ -77,12 +135,6 @@ namespace LZW_ARC
             //пока не конец файла
             while (inBitStream.Count >= curIndexLenght)
             {
-                //вывод процента выполнения
-                if (onePersent * curPersents < inFile.Position)
-                {
-                    curPersents++;
-                    Console.WriteLine((curPersents - 1).ToString() + "% - " + (tableLastIndex + 1).ToString() + " chains");
-                }
 
                 //чтение номера цепочки из очереди байт и преобразование его в int
                 for (int k = 0; k < curIndexLenght; k++)
@@ -137,6 +189,7 @@ namespace LZW_ARC
                 //считывание очередного блока байт при уменьшении длины очереди и добавление бит в очередь
                 if (inBitStream.Count < 32 && inFile.Position != inFile.Length)
                 {
+
                     int readBytesNumCur = readBytesBlockCount;
                     if ((inFile.Length - inFile.Position) < readBytesBlockCount) readBytesNumCur = (int)(inFile.Length - inFile.Position);
 
@@ -148,6 +201,8 @@ namespace LZW_ARC
                         inBitStream.Enqueue(readBytesBits[m]);
                     }
 
+                    inFilePos = inFile.Position;
+                    outFileLength = outFile.Length;
                 }
             }
 
@@ -156,11 +211,8 @@ namespace LZW_ARC
             outFile.Close();
 
             //запись времени файла
-            FileInfo outFileInfo = new FileInfo(outFileName);
+            FileInfo outFileInfo = new FileInfo(outFolder + "\\" + outFileName);
             outFileInfo.LastWriteTimeUtc = outFileTime;
-
-            Console.WriteLine("Done");
-            Console.ReadKey(false);
         }
 
 
