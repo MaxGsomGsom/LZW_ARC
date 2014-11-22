@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace LZW_ARC
 {
-    public class ChainShell
+    class ChainShell
     {
         public ChainShell(int index, byte[] chain, int statistic)
         {
@@ -70,10 +70,10 @@ namespace LZW_ARC
 
         private void t_Tick(object sender, EventArgs e)
         {
-            if (ii>1)
+            if (ii>=1)
             {
                 int curPersent = (int)(((double)ii / (double)inFileLength) * 100);
-                int compression = (int)(((double)ii / (double)outFileLength) * 100);
+                int compression = (int)(((double)outFileLength / (double)ii) * 100);
                 PersentEventArgs e1 = new PersentEventArgs(curPersent, inFileLength, ii, compression);
                 if (curPersent == 100) t.Stop();
                 PersentEvent(this, e1); 
@@ -89,8 +89,21 @@ namespace LZW_ARC
 
         void Encode(string inFileName, string outFileName)
         {
-            FileStream inFile = new FileStream(inFileName, FileMode.Open);
-            FileStream outFile = new FileStream(outFileName, FileMode.Create);
+            FileStream inFile;
+            FileStream outFile;
+            try
+            {
+                inFile = new FileStream(inFileName, FileMode.Open);
+                outFile = new FileStream(outFileName, FileMode.Create);
+            }
+            catch
+            {
+                MessageBox.Show("Отказано в доступе к файлу", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ii = 1;
+                inFileLength = 1;
+                outFileLength = 1;
+                return;
+            }
             inFileLength = inFile.Length;
 
             //запись атрибутов файла в начало архива
@@ -234,7 +247,7 @@ namespace LZW_ARC
 
             //запись номера последней цепочки
             byte[] prefixLastHash = GetHash(prefix);
-            int[] prefixLastIndex = { table[SearchChain(table, prefixLastHash)].statistic };
+            int[] prefixLastIndex = { table[SearchChain(table, prefixLastHash)].index};
             BitArray prefixLastIndexBits = new BitArray(prefixLastIndex);
             //добавляет биты в очередь
             for (int m = 0; m < curIndexLenght; m++)
