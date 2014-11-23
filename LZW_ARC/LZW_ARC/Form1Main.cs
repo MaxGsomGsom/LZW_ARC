@@ -7,8 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-//по идее можно сделать полную очистку через каждые несколько блоков или по достижению определенного индекса, это экономит биты с каждой цепочки, при 2 в 18 экономит 32Кб каждые 250000 тыс цепочек, при 500000 цепочек при полной очистке теряется 40 Кб
-//переделать хэширование crc32, чтобы каждый хэш хранил список цепочек, если это будет ускарять поиск при неочищаемой таблице
+
 namespace LZW_ARC
 {
     public partial class Form1Main : Form
@@ -23,17 +22,20 @@ namespace LZW_ARC
             int chainCount = 100000;
             switch (trackBar1.Value)
             {
-                case 0: chainCount = 5000; break;
-                case 1: chainCount = 10000; break;
-                case 2: chainCount = 50000; break;
-                case 3: chainCount = 100000; break;
-                case 4: chainCount = 250000; break;
-                case 5: chainCount = 500000; break;
-                case 6: chainCount = int.MaxValue; break;
+                case 0: chainCount = 4096; break;
+                case 1: chainCount = 8192; break;
+                case 2: chainCount = 16384; break;
+                case 3: chainCount = 32768; break;
+                case 4: chainCount = 65536; break;
+                case 5: chainCount = 131072; break;
+                case 6: chainCount = 262144; break;
+                case 7: chainCount = 524288; break;
+                case 8: chainCount = 1048576; break;
+                case 9: chainCount = int.MaxValue; break;
             }
 
 
-            Coder c = new Coder(0, chainCount, false);
+            Coder c = new Coder(0, chainCount, radioButton1full.Checked);
             OpenFileDialog opnDialog = new OpenFileDialog();
             SaveFileDialog svDialog = new SaveFileDialog();
             opnDialog.Title = "Файл для сжатия";
