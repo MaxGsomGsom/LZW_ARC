@@ -2,7 +2,6 @@
 using System.IO;
 using System.Collections.Generic;
 using System.Collections;
-using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
 using System.Threading.Tasks;
@@ -43,11 +42,11 @@ namespace LZW_ARC
         int curIndexLenght = 9;
         int writeBytesBlockCount = 512;
         int readBytesBlockCount = 512;
-        int delChainStatistic = 1;
+        int delChainStatistic = 0;
         int delTableCount = 100000;
-        bool usingHash = false;
+        bool fullCleanTable = false; 
 
-        long ii = -1;
+        long inFilePos = -1;
         long inFileLength = -1;
         long outFileLength = -1;
 
@@ -55,12 +54,12 @@ namespace LZW_ARC
         
         Timer t;
 
-        
-        public Coder(int delChainStatistic, int delTableCount, bool usingHash)
+
+        public Coder(int delChainStatistic, int delTableCount, bool fullCleanTable)
         {
             this.delChainStatistic = delChainStatistic;
             this.delTableCount = delTableCount;
-            this.usingHash = usingHash;
+            this.fullCleanTable = fullCleanTable;
             t = new Timer();
             t.Interval=500;
             t.Tick+=t_Tick;
@@ -70,11 +69,11 @@ namespace LZW_ARC
 
         private void t_Tick(object sender, EventArgs e)
         {
-            if (ii>=1)
+            if (inFilePos>= 1)
             {
-                int curPersent = (int)(((double)ii / (double)inFileLength) * 100);
-                int compression = (int)(((double)outFileLength / (double)ii) * 100);
-                PersentEventArgs e1 = new PersentEventArgs(curPersent, inFileLength, ii, compression);
+                int curPersent = (int)(((double)inFilePos / (double)inFileLength) * 100);
+                int compression = (int)(((double)outFileLength / (double)inFilePos) * 100);
+                PersentEventArgs e1 = new PersentEventArgs(curPersent, inFileLength, inFilePos, compression);
                 if (curPersent == 100) t.Stop();
                 PersentEvent(this, e1); 
             }
@@ -95,11 +94,12 @@ namespace LZW_ARC
             {
                 inFile = new FileStream(inFileName, FileMode.Open);
                 outFile = new FileStream(outFileName, FileMode.Create);
+                if (inFile.Length == 0) throw new FileNotFoundException();
             }
             catch
             {
                 MessageBox.Show("Отказано в доступе к файлу", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ii = 1;
+                inFilePos = 1;
                 inFileLength = 1;
                 outFileLength = 1;
                 return;
@@ -110,8 +110,11 @@ namespace LZW_ARC
             FileInfo inFileInfo = new FileInfo(inFileName);
 
             outFile.WriteByte(Convert.ToByte(inFileInfo.Name.Length));
-            outFile.Write(Encoding.ASCII.GetBytes(inFileInfo.Name), 0, inFileInfo.Name.Length);
+            outFile.Write(Encoding.Unicode.GetBytes(inFileInfo.Name), 0, inFileInfo.Name.Length*2);
             outFile.Write(BitConverter.GetBytes(inFileInfo.LastWriteTimeUtc.Ticks), 0, sizeof(long));
+            //запись инфы об очистке в файл
+            if (fullCleanTable) outFile.Write(BitConverter.GetBytes(delTableCount), 0, sizeof(int));
+            else outFile.Write(BitConverter.GetBytes(-1), 0, sizeof(int));
 
             //очередь бит для записи в файл
             Queue<bool> outBitStream = new Queue<bool>();
@@ -129,21 +132,19 @@ namespace LZW_ARC
             {
                 //помещаем индекс, цепочку, статистику в капсулу
                 byte[] chainBytes = { (byte)i };
-                byte[] chainHash = GetHash(chainBytes);
-                ChainShell shellChain = new ChainShell(i, chainHash, int.MinValue);
+                ChainShell shellChain = new ChainShell(i, chainBytes, int.MinValue);
                 //помещаем её на место в таблице
-                int chainPlace = SearchChain(table, chainHash, true);
+                int chainPlace = SearchChain(table, chainBytes, true);
                 table.Insert(chainPlace, shellChain);
 
             }
             //номер последней цепочки в таблице
             int tableLastIndex = (int)Math.Pow(2, 8) - 1;
             //префикс
-            byte[] prefix = { };
+            byte[] prefixBytes = { };
             //основной цикл
-            for (ii = 0; ii < inFile.Length; ii++)
+            for (inFilePos = 0; inFilePos < inFile.Length; inFilePos++)
             {
-
                 //чтение очередного блока байт
                 if (newSymbolsStream.Count == 0)
                 {
@@ -159,27 +160,27 @@ namespace LZW_ARC
 
                 byte newSymbol = newSymbolsStream.Dequeue();
                 //добавляет байт к префиксу
-                byte[] chainBytes = (byte[])prefix.Clone();
+                byte[] chainBytes = (byte[])prefixBytes.Clone();
                 Array.Resize<byte>(ref chainBytes, chainBytes.Length + 1);
                 chainBytes[chainBytes.Length - 1] = newSymbol;
-                //считает хэш цепочки
-                byte[] chainHash = GetHash(chainBytes);
 
                 //если эта цепь уже есть в таблице
-                if (SearchChain(table, chainHash) >= 0) prefix = chainBytes;
+                if (SearchChain(table, chainBytes) >= 0)
+                {
+                    prefixBytes = chainBytes;
+                }
                 else
                 {
-                    //ищет место для цепочки в сортированном массиве
-                    int placeForChain = SearchChain(table, chainHash, true);
+                    //ищет место для цепочки в таблице
+                    int placeForChain = SearchChain(table, chainBytes, true);
                     //инкапсулирует индекс, цепочку и ее статистику
                     tableLastIndex++;
-                    ChainShell shellChain = new ChainShell(tableLastIndex, chainHash, 0);
+                    ChainShell shellChain = new ChainShell(tableLastIndex, chainBytes, 0);
                     //вставляет капсулу в массив на нужное место
                     table.Insert(placeForChain, shellChain);
 
                     //находит префикс в таблице и увеличивает статистику
-                    byte[] prefixHash = GetHash(prefix);
-                    int prefixPosInTable = SearchChain(table, prefixHash);
+                    int prefixPosInTable = SearchChain(table, prefixBytes);
                     table[prefixPosInTable].statistic = table[prefixPosInTable].statistic + 1;
 
                     //записывает номер цепочки как массив бит с поправкой на сортировку 
@@ -208,9 +209,7 @@ namespace LZW_ARC
 
 
                     byte[] newSymbolByte = { newSymbol };
-                    prefix = newSymbolByte;
-
-
+                    prefixBytes = newSymbolByte;
                 }
 
                 //увеличивает таблицу и длину номера цепочки при заполнении
@@ -221,7 +220,7 @@ namespace LZW_ARC
                 }
 
                 //очистка редко используемых цепочек при превышении ею определенного размера на основе статистики
-                if (table.Count >= delTableCount)
+                if (!fullCleanTable && table.Count == delTableCount - 1)
                 {
                     List<ChainShell> newTable = new List<ChainShell>(delTableCount);
                     for (int n = 0; n < table.Count; n++)
@@ -243,11 +242,31 @@ namespace LZW_ARC
                     if (table.Count > delTableCount * 0.8) delChainStatistic++;
                 }
 
+                //полная очистка после определенного числа цепочек
+                else if (fullCleanTable && tableLastIndex == delTableCount-1)
+                {
+                    table = new List<ChainShell>();
+                    //заполнение корня
+                    for (int i = 0; i < Math.Pow(2, 8); i++)
+                    {
+                        byte[] chainBytesRoot = { (byte)i };
+                        ChainShell shellChain = new ChainShell(i, chainBytesRoot, int.MinValue);
+                        int chainPlace = SearchChain(table, chainBytesRoot, true);
+                        table.Insert(chainPlace, shellChain);
+                    }
+                    //устанавливаем переменные в начальное значение
+                    curIndexLenght = 9;
+                    maxTableSize = (int)Math.Pow(2, curIndexLenght);
+                    tableLastIndex = (int)Math.Pow(2, 8) - 1;
+                    //prefixBytes = new byte[0];
+                    chainBytes = new byte[0];
+
+                }
+
             }
 
             //запись номера последней цепочки
-            byte[] prefixLastHash = GetHash(prefix);
-            int[] prefixLastIndex = { table[SearchChain(table, prefixLastHash)].index};
+            int[] prefixLastIndex = { table[SearchChain(table, prefixBytes)].index };
             BitArray prefixLastIndexBits = new BitArray(prefixLastIndex);
             //добавляет биты в очередь
             for (int m = 0; m < curIndexLenght; m++)
@@ -334,15 +353,6 @@ namespace LZW_ARC
                 if (one[i] > two[i]) return 1;
             }
             return 0;
-        }
-
-        //хэширование
-        MD5 md5Alg = MD5Cng.Create();
-
-        byte[] GetHash(byte[] buf)
-        {
-            if (!usingHash) return buf;
-            return md5Alg.ComputeHash(buf);
         }
 
     }

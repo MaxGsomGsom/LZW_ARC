@@ -18,6 +18,7 @@ namespace LZW_ARC
         long inFileLength = -1;
         long outFileLength = -1;
 
+
         public event EventHandler<PersentEventArgs> PersentEvent;
 
         public Decoder()
@@ -48,8 +49,13 @@ namespace LZW_ARC
 
         void Decode(string inFileName, string outFolder)
         {
+            bool fullCleanTable = false;
+            int delTableCount = -1;
+            bool isFirstChain = true;
+
             FileStream inFile;
             FileStream outFile;
+
             try
             {
                 inFile = new FileStream(inFileName, FileMode.Open);
@@ -66,9 +72,9 @@ namespace LZW_ARC
 
             //чтение имени файла из архива
             int outFileNameLenght = inFile.ReadByte();
-            byte[] outFileNameBytes = new byte[outFileNameLenght];
-            inFile.Read(outFileNameBytes, 0, outFileNameLenght);
-            string outFileName = Encoding.ASCII.GetString(outFileNameBytes);
+            byte[] outFileNameBytes = new byte[outFileNameLenght*2];
+            inFile.Read(outFileNameBytes, 0, outFileNameLenght*2);
+            string outFileName = Encoding.Unicode.GetString(outFileNameBytes);
 
             try
             {
@@ -95,6 +101,12 @@ namespace LZW_ARC
             long outFileTimeTicks = BitConverter.ToInt64(outFileTimeTicksBytes, 0);
             DateTime outFileTime = new DateTime(outFileTimeTicks);
 
+            //использовалась ли полная очистка при сжатии
+            byte[] tableLenghtDelByte = new byte[sizeof(int)];
+            inFile.Read(tableLenghtDelByte,0, 4);
+            delTableCount = BitConverter.ToInt32(tableLenghtDelByte, 0);
+            fullCleanTable = (delTableCount < 0) ? false : true;
+
             //таблица цепочек
             List<byte[]> table = new List<byte[]>();
             //заполнение корня
@@ -115,26 +127,36 @@ namespace LZW_ARC
             {
                 inBitStream.Enqueue(readBytesBits[m]);
             }
-            //чтение первого номера из очереди и его преобразование в int
+
+            int indexChain=-1;
+            int oldIndexChain = -1;
             byte[] indexBytes = new byte[4];
             BitArray indexBits = new BitArray(indexBytes);
-            for (int k = 0; k < curIndexLenght; k++)
-            {
-                indexBits.Set(k, inBitStream.Dequeue());
-            }
-            indexBits.CopyTo(indexBytes, 0);
-
-            int indexChain = BitConverter.ToInt32(indexBytes, 0);
-
-            //запись первой цепочки
-            byte[] outChain1 = table[indexChain];
-            outFile.Write(outChain1, 0, outChain1.Length);
-
-            int oldIndexChain = indexChain;
 
             //пока не конец файла
             while (inBitStream.Count >= curIndexLenght)
             {
+                if (isFirstChain)
+                {
+                    indexBytes = new byte[4];
+                    indexBits = new BitArray(indexBytes);
+                    //чтение первого номера из очереди и его преобразование в int
+                    for (int k = 0; k < curIndexLenght; k++)
+                    {
+                        indexBits.Set(k, inBitStream.Dequeue());
+                    }
+
+                    indexBits.CopyTo(indexBytes, 0);
+
+                    indexChain = BitConverter.ToInt32(indexBytes, 0);
+
+                    //запись первой цепочки
+                    byte[] outChain = table[indexChain];
+                    outFile.Write(outChain, 0, outChain.Length);
+
+                    oldIndexChain = indexChain;
+                    isFirstChain = false;
+                }
 
                 //чтение номера цепочки из очереди байт и преобразование его в int
                 for (int k = 0; k < curIndexLenght; k++)
@@ -184,6 +206,23 @@ namespace LZW_ARC
                 {
                     curIndexLenght += 1;
                     curTableDimension = (int)Math.Pow(2, curIndexLenght);
+                }
+
+                //полная очистка таблицы
+                if (fullCleanTable && table.Count == delTableCount-1)
+                {
+                    table = new List<byte[]>();
+                    //заполнение корня
+                    for (int i = 0; i < Math.Pow(2, 8); i++)
+                    {
+                        byte[] chain = { (byte)i };
+                        table.Add(chain);
+                    }
+                    curIndexLenght = 9;
+                    curTableDimension = (int)Math.Pow(2, curIndexLenght);
+                    tableLastIndex = (int)Math.Pow(2, 8) - 1;
+                    isFirstChain = true;
+
                 }
 
                 //считывание очередного блока байт при уменьшении длины очереди и добавление бит в очередь
