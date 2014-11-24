@@ -49,7 +49,6 @@ namespace LZW_ARC
             if (svDialog.FileName == "") return;
             button1Encode.Enabled = false;
             button2Decode.Enabled = false;
-            trackBar1.Enabled = false;
 
             label3in.Text = (opnDialog.FileName.Length > 50) ? (opnDialog.FileName.Substring(opnDialog.FileName.Length - 50, 50)) : (opnDialog.FileName);
             label4out.Text = (svDialog.FileName.Length > 50) ? (svDialog.FileName.Substring(svDialog.FileName.Length - 50, 50)) : (svDialog.FileName);
@@ -68,7 +67,6 @@ namespace LZW_ARC
                 MessageBox.Show("Сжатие завершено!", "Завершено", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 button1Encode.Enabled = true;
                 button2Decode.Enabled = true;
-                trackBar1.Enabled = true;
             }
         }
 
@@ -87,7 +85,6 @@ namespace LZW_ARC
             if (svDialog.SelectedPath == "") return;
             button1Encode.Enabled = false;
             button2Decode.Enabled = false;
-            trackBar1.Enabled = false;
 
             label3in.Text = (opnDialog.FileName.Length>50)?(opnDialog.FileName.Substring(opnDialog.FileName.Length - 50, 50)):(opnDialog.FileName);
             label4out.Text = (svDialog.SelectedPath.Length>50)?(svDialog.SelectedPath.Substring(svDialog.SelectedPath.Length - 50, 50)):(svDialog.SelectedPath);
@@ -105,7 +102,6 @@ namespace LZW_ARC
                 MessageBox.Show("Распаковка завершена!", "Завершено", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 button1Encode.Enabled = true;
                 button2Decode.Enabled = true;
-                trackBar1.Enabled = true;
             }
         }
 
