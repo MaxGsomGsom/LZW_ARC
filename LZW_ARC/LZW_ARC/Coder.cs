@@ -105,7 +105,7 @@ namespace LZW_ARC
                 return;
             }
             inFileLength = inFile.Length;
-
+            
             //запись атрибутов файла в начало архива
             FileInfo inFileInfo = new FileInfo(inFileName);
 
@@ -124,9 +124,8 @@ namespace LZW_ARC
 
             //таблица цепочек
             int maxTableSize = (int)Math.Pow(2, curIndexLenght);
-            List<ChainShell> table = new List<ChainShell>();
+            List<ChainShell> table = new List<ChainShell>(delTableCount);
 
-            List<int> statistics = new List<int>();
             //заполнение корня
             for (int i = 0; i < Math.Pow(2, 8); i++)
             {
@@ -134,8 +133,8 @@ namespace LZW_ARC
                 byte[] chainBytes = { (byte)i };
                 ChainShell shellChain = new ChainShell(i, chainBytes, int.MinValue);
                 //помещаем её на место в таблице
-                int chainPlace = SearchChain(table, chainBytes, true);
-                table.Insert(chainPlace, shellChain);
+                SearchChain(table, chainBytes);
+                table.Insert(placeForPaste, shellChain);
 
             }
             //номер последней цепочки в таблице
@@ -143,13 +142,13 @@ namespace LZW_ARC
             //префикс
             byte[] prefixBytes = { };
             //основной цикл
-            for (inFilePos = 0; inFilePos < inFile.Length; inFilePos++)
+            for (inFilePos = 0; inFilePos < inFileLength; inFilePos++)
             {
                 //чтение очередного блока байт
                 if (newSymbolsStream.Count == 0)
                 {
                     int readCount = readBytesBlockCount;
-                    if ((inFile.Length - inFile.Position) < readBytesBlockCount) readCount = (int)(inFile.Length - inFile.Position);
+                    if ((inFileLength - inFile.Position) < readBytesBlockCount) readCount = (int)(inFileLength - inFile.Position);
 
                     inFile.Read(newSymbolsArr, 0, readCount);
                     for (int m = 0; m < readCount; m++)
@@ -171,13 +170,11 @@ namespace LZW_ARC
                 }
                 else
                 {
-                    //ищет место для цепочки в таблице
-                    int placeForChain = SearchChain(table, chainBytes, true);
                     //инкапсулирует индекс, цепочку и ее статистику
                     tableLastIndex++;
                     ChainShell shellChain = new ChainShell(tableLastIndex, chainBytes, 0);
                     //вставляет капсулу в массив на нужное место
-                    table.Insert(placeForChain, shellChain);
+                    table.Insert(placeForPaste, shellChain);
 
                     //находит префикс в таблице и увеличивает статистику
                     int prefixPosInTable = SearchChain(table, prefixBytes);
@@ -211,7 +208,7 @@ namespace LZW_ARC
                     byte[] newSymbolByte = { newSymbol };
                     prefixBytes = newSymbolByte;
                 }
-
+                
                 //увеличивает таблицу и длину номера цепочки при заполнении
                 if (tableLastIndex == maxTableSize - 1)
                 {
@@ -245,14 +242,14 @@ namespace LZW_ARC
                 //полная очистка после определенного числа цепочек
                 else if (fullCleanTable && tableLastIndex == delTableCount-1)
                 {
-                    table = new List<ChainShell>();
+                    table = new List<ChainShell>(delTableCount);
                     //заполнение корня
                     for (int i = 0; i < Math.Pow(2, 8); i++)
                     {
                         byte[] chainBytesRoot = { (byte)i };
                         ChainShell shellChain = new ChainShell(i, chainBytesRoot, int.MinValue);
-                        int chainPlace = SearchChain(table, chainBytesRoot, true);
-                        table.Insert(chainPlace, shellChain);
+                        int chainPlace = SearchChain(table, chainBytesRoot);
+                        table.Insert(placeForPaste, shellChain);
                     }
                     //устанавливаем переменные в начальное значение
                     curIndexLenght = 9;
@@ -291,8 +288,12 @@ namespace LZW_ARC
             outFile.Close();
         }
 
+
+
+        int placeForPaste = -1;
+
         //поиск цепочки в таблице или места для ее вставки бинарным поиском
-        int SearchChain(List<ChainShell> table, byte[] chain, bool pasteMode = false)
+        int SearchChain(List<ChainShell> table, byte[] chain)
         {
             //pasteMode = true двоичный поиск места цепочки для вставки
             //pasteMode = false двоичный поиск места цепочки в таблице
@@ -300,18 +301,19 @@ namespace LZW_ARC
             int first = 0;
             int last = table.Count;
 
+            placeForPaste = 0;
+
             //если массив пуст
-            if (pasteMode && table.Count == 0) return 0;
+            if (table.Count == 0) return 0;
             else if (BytesComparer(table[0].chain, chain) == 1)
             {
                 //не найден, вставить элемент на индекс 0
-                if (pasteMode) return 0;
                 return -1;
             }
             else if (BytesComparer(table[last - 1].chain, chain) == -1)
             {
                 //не найден, вставить элемент в конец
-                if (pasteMode) return last;
+                placeForPaste = last;
                 return -1;
             }
 
@@ -337,7 +339,7 @@ namespace LZW_ARC
             //не найден, вставить элемент на индекс last
             else
             {
-                if (pasteMode) return last;
+                placeForPaste = last;
                 return -1;
             }
         }
