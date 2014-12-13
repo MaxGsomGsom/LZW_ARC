@@ -97,25 +97,25 @@
             this.groupBox1Options.Size = new System.Drawing.Size(270, 122);
             this.groupBox1Options.TabIndex = 4;
             this.groupBox1Options.TabStop = false;
-            this.groupBox1Options.Text = "Настройки сжатия";
+            this.groupBox1Options.Text = "Размер таблицы цепочек";
             // 
             // label4
             // 
             this.label4.AutoSize = true;
             this.label4.Location = new System.Drawing.Point(201, 30);
             this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(57, 17);
+            this.label4.Size = new System.Drawing.Size(59, 17);
             this.label4.TabIndex = 2;
-            this.label4.Text = "Размер";
+            this.label4.Text = "Больше";
             // 
             // label3
             // 
             this.label3.AutoSize = true;
             this.label3.Location = new System.Drawing.Point(8, 30);
             this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(69, 17);
+            this.label3.Size = new System.Drawing.Size(61, 17);
             this.label3.TabIndex = 1;
-            this.label3.Text = "Скорость";
+            this.label3.Text = "Меньше";
             // 
             // trackBar1
             // 
