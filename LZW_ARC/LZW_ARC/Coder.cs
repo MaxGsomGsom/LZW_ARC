@@ -124,7 +124,7 @@ namespace LZW_ARC
 
             //таблица цепочек
             int maxTableSize = (int)Math.Pow(2, curIndexLenght);
-            List<ChainShell> table = new List<ChainShell>(delTableCount);
+            List<ChainShell> table = new List<ChainShell>((delTableCount > 1048576) ? 1048576 : delTableCount);
 
             //заполнение корня
             for (int i = 0; i < Math.Pow(2, 8); i++)
@@ -219,7 +219,7 @@ namespace LZW_ARC
                 //очистка редко используемых цепочек при превышении ею определенного размера на основе статистики
                 if (!fullCleanTable && table.Count == delTableCount - 1)
                 {
-                    List<ChainShell> newTable = new List<ChainShell>(delTableCount);
+                    List<ChainShell> newTable = new List<ChainShell>((delTableCount > 1048576) ? 1048576 : delTableCount);
                     for (int n = 0; n < table.Count; n++)
                     {
                         //если цепочка не использовалась с момента последней очистки - удалить ее
@@ -242,7 +242,7 @@ namespace LZW_ARC
                 //полная очистка после определенного числа цепочек
                 else if (fullCleanTable && tableLastIndex == delTableCount-1)
                 {
-                    table = new List<ChainShell>(delTableCount);
+                    table = new List<ChainShell>((delTableCount > 1048576) ? 1048576 : delTableCount);
                     //заполнение корня
                     for (int i = 0; i < Math.Pow(2, 8); i++)
                     {
